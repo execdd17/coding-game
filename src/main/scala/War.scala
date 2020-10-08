@@ -1,10 +1,6 @@
-package codinggame
-
-import math._
 import scala.collection.mutable
-import scala.util._
 import scala.io.StdIn._
-
+import scala.math._
 
 class Cards(val queue: mutable.Queue[Card]) {
   def add(newCards: Card*): Unit = newCards.foreach(queue.enqueue(_))
@@ -12,6 +8,7 @@ class Cards(val queue: mutable.Queue[Card]) {
   def take(amount: Int): List[Card] =
     1.to(amount).foldLeft(List.empty[Card])((memo, i) => memo ++ List(queue.dequeue()))
 
+  override def toString: String = queue.toString()
 }
 
 class Player {
@@ -20,10 +17,20 @@ class Player {
   def addCards(newCards: Card*): Unit = cards.add(newCards:_*)
 
   def presentCard: Card = cards.take(1).head
+
+  def hasCards: Boolean = cards.queue.nonEmpty
+
+  def war: Cards = {
+    val q = mutable.Queue.empty[Card]
+    cards.take(4).foreach(q.enqueue(_))
+    new Cards(queue = q)
+  }
+
+  override def toString: String = cards.toString
 }
 
 object Card {
-  val ValueMap: Map[Char, Int] = Map('J' -> 11, 'Q' -> 12, 'K' -> 12, 'A' -> 13)
+  val ValueMap: Map[Char, Int] = Map('J' -> 11, 'Q' -> 12, 'K' -> 13, 'A' -> 14)
 
   def apply(token: String): Card =
     new Card(value = token.substring(0, token.length - 1), token.last)
@@ -49,6 +56,7 @@ class Card(value: String, suit: Char) extends Ordered[Card] {
  * the standard input according to the problem statement.
  **/
 object Solution extends App {
+
   val player1 = new Player
   val player2 = new Player
 
@@ -64,10 +72,34 @@ object Solution extends App {
     player2.addCards(Card.apply(cardp2))
   }
 
-  println(player1.presentCard)
+  var numRounds = 0
+
+  while (player1.hasCards && player2.hasCards) {
+    val p1Card = player1.presentCard
+    val p2Card = player2.presentCard
+
+    if (p1Card > p2Card)
+      player1.addCards(List(p1Card, p2Card):_*)
+    else if (p1Card < p2Card)
+      player2.addCards(List(p2Card, p1Card):_*)
+    else {
+      Console.err.println(s"TIE $p1Card $p2Card")
+      throw new IllegalStateException("Not implemented")
+    }
+
+    Console.err.println(player1.toString)
+    Console.err.println(player2.toString)
+    numRounds += 1
+  }
 
   // Write an answer using println
   // To debug: Console.err.println("Debug messages...")
 
-  println("PAT")
+  if (player1.hasCards && player2.hasCards)
+    println("PAT")
+  else if (player1.hasCards)
+    println(s"1 $numRounds")
+  else
+    println(s"2 $numRounds")
+
 }
