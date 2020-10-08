@@ -1,4 +1,4 @@
-name := "ocean-of-code"
+name := "coding-game"
 
 version := "0.1"
 
