@@ -65,9 +65,21 @@ object Solution extends App {
     } else if (p1Card < p2Card) {
       player2.addCards(awardedCards: _*)
     } else {
-      1.to(4).foreach(i => p1Cards.add(p1.presentCard))
-      1.to(4).foreach(i => p2Cards.add(p2.presentCard))
-      resolve(player1, p1Cards, player2, p2Cards)
+
+      // NOTE: strange rule that if either player doesn't have enough
+      // cards to continue, then it ends in a draw.
+      //
+      // In this case I just clear the queue for both as a short circuit
+      if (p1.cards.queue.length < 4 || p2.cards.queue.length < 4) {
+        p1.cards.queue.clear()
+        p2.cards.queue.clear()
+      }
+
+      if (p1.hasCards && p2.hasCards) {
+        1.to(4).foreach(i => p1Cards.add(p1.presentCard))
+        1.to(4).foreach(i => p2Cards.add(p2.presentCard))
+        resolve(player1, p1Cards, player2, p2Cards)
+      }
     }
   }
 
@@ -99,7 +111,7 @@ object Solution extends App {
   // Write an answer using println
   // To debug: Console.err.println("Debug messages...")
 
-  if (player1.hasCards && player2.hasCards)
+  if (!player1.hasCards && !player2.hasCards)
     println("PAT")
   else if (player1.hasCards)
     println(s"1 $numRounds")
