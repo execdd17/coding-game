@@ -1,3 +1,4 @@
+import scala.annotation.tailrec
 import scala.collection.mutable
 import scala.io.StdIn._
 import scala.math._
@@ -12,19 +13,13 @@ class Cards(val queue: mutable.Queue[Card]) {
 }
 
 class Player {
-  private val cards: Cards = new Cards(mutable.Queue.empty[Card])
+  val cards: Cards = new Cards(mutable.Queue.empty[Card])
 
   def addCards(newCards: Card*): Unit = cards.add(newCards:_*)
 
   def presentCard: Card = cards.take(1).head
 
   def hasCards: Boolean = cards.queue.nonEmpty
-
-  def war: Cards = {
-    val q = mutable.Queue.empty[Card]
-    cards.take(4).foreach(q.enqueue(_))
-    new Cards(queue = q)
-  }
 
   override def toString: String = cards.toString
 }
@@ -57,6 +52,25 @@ class Card(value: String, suit: Char) extends Ordered[Card] {
  **/
 object Solution extends App {
 
+  @tailrec
+  def resolve(p1: Player, p1Cards: Cards, p2: Player, p2Cards: Cards): Unit = {
+    val p1Card = p1Cards.queue.last
+    val p2Card = p2Cards.queue.last
+
+    // NOTE: this order is critical and specified by game rules
+    val awardedCards = p1Cards.queue.toList ++ p2Cards.queue.toList
+
+    if (p1Card > p2Card) {
+      player1.addCards(awardedCards:_*)
+    } else if (p1Card < p2Card) {
+      player2.addCards(awardedCards: _*)
+    } else {
+      1.to(4).foreach(i => p1Cards.add(p1.presentCard))
+      1.to(4).foreach(i => p2Cards.add(p2.presentCard))
+      resolve(player1, p1Cards, player2, p2Cards)
+    }
+  }
+
   val player1 = new Player
   val player2 = new Player
 
@@ -75,20 +89,10 @@ object Solution extends App {
   var numRounds = 0
 
   while (player1.hasCards && player2.hasCards) {
-    val p1Card = player1.presentCard
-    val p2Card = player2.presentCard
+    val p1Cards = new Cards(mutable.Queue(player1.presentCard))
+    val p2Cards = new Cards(mutable.Queue(player2.presentCard))
 
-    if (p1Card > p2Card)
-      player1.addCards(List(p1Card, p2Card):_*)
-    else if (p1Card < p2Card)
-      player2.addCards(List(p2Card, p1Card):_*)
-    else {
-      Console.err.println(s"TIE $p1Card $p2Card")
-      throw new IllegalStateException("Not implemented")
-    }
-
-    Console.err.println(player1.toString)
-    Console.err.println(player2.toString)
+    resolve(player1, p1Cards, player2, p2Cards)
     numRounds += 1
   }
 
