@@ -20,28 +20,40 @@ object Ash {
 class Ash(location: Point, humans: Map[Int, Agent], zombies: Map[Int, Agent])
   extends Agent(-1, location) with Movable {
 
-  private val humanZombieDistances = calculateDistances
-  Console.err.println(humanZombieDistances)
+  // key is the distance between the two agent ids
+  // _1 is the human id and _2 is the zombie id
+  private val zombieHumanDistances: Map[Double, (Int,Int)] = calculateDistances
+  Console.err.println(zombieHumanDistances.toList.sortBy(_._1))
 
   override def getMovementPoints: Int = 1000
 
   def getNextMove: Point = {
-    val maybeMove = humanZombieDistances.keys.toList.sorted.find { distance =>
-      isPossibleToSave(humans(humanZombieDistances(distance)),zombies.head._2)
+    val goners = mutable.ListBuffer.empty[Int]
+
+    val maybeMove = zombieHumanDistances.keys.toList.sorted.find { distance =>
+      val canSave = isPossibleToSave(
+        humans(zombieHumanDistances(distance)._1),
+        zombies(zombieHumanDistances(distance)._2)
+      )
+
+      if (!canSave)
+        goners += zombieHumanDistances(distance)._1
+
+      canSave && !goners.contains(zombieHumanDistances(distance)._1)
     }
 
     maybeMove match {
-      case Some(distanceKey) => humans(humanZombieDistances(distanceKey)).point
+      case Some(distanceKey) => humans(zombieHumanDistances(distanceKey)._1).point
       case None =>
         Console.err.println("IT IS HOPELESS!")
         location // stay where you are and cry
     }
   }
 
-  private def calculateDistances: Map[Double, Int] = {
-    humans.map { human =>
-      val closestZombie = zombies.minBy(tuple => Trig.distance(tuple._2.point, human._2.point))
-      Map(Trig.distance(closestZombie._2.point, human._2.point) -> human._1)
+  private def calculateDistances: Map[Double, (Int,Int)] = {
+    zombies.map { zombie =>
+      val closestHuman = humans.minBy(tuple => Trig.distance(tuple._2.point, zombie._2.point))
+      Map(Trig.distance(closestHuman._2.point, zombie._2.point) -> (closestHuman._1, zombie._1))
     }.flatten.toMap
   }
 
