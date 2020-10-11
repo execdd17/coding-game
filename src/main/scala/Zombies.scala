@@ -44,7 +44,7 @@ object Simulation {
 }
 
 object GameState {
-  val rand = new Random(seed = 1234)
+  val rand = new Random
   val Array(maxX, maxY) = Array(16000, 9000)
 
   def getRandomPoint: Point = Point(rand.nextInt(maxX), rand.nextInt(maxY))
@@ -57,6 +57,8 @@ class GameState(humans: List[Agent], zombies: List[Zombie], ash: Ash) {
   val eatReward = 10
 
   def getAshLocation: Point = ash.point
+
+  def getClosestHumanToAsh: Point = humans.minBy(h => Trig.distance(h.point, getAshLocation)).point
 
   def areAllHumansDead: Boolean = humans.isEmpty
 
@@ -242,11 +244,28 @@ object Player extends App {
       ash
     )
 
-    val maxIterations = 1000
+    // Monte Carlo can't run for more than 100ms
+    // so try to tailor the iterations based on how much work
+    // is needed
+    val maxIterations = 
+    if (zombies.size + humans.size <= 4)
+        850
+    else if (zombies.size + humans.size <= 6)
+        450
+    else if (zombies.size + humans.size < 10)
+        300
+    else if (zombies.size + humans.size < 15)
+        180
+    else if (zombies.size + humans.size < 20)
+        85
+    else
+        60
+
     var nextMove: Point = null
     var bestScore: Double = 0.0
     var i = 0
 
+    Console.err.println(s"Running $maxIterations times...")
     while (i < maxIterations) {
       val result = Simulation.monteCarlo(maxRounds = 30, startingState = gameState)
 
@@ -258,11 +277,14 @@ object Player extends App {
       i += 1
     }
 
-    // TODO: THERE IS SOMETHING WRONG WHERE IT RETURNS NULL NEXT MOVE
     Console.err.println(s"Best score found was $bestScore via point $nextMove")
-    if (nextMove != null)
+    if (nextMove != null) {
       println(nextMove.x + " " + nextMove.y)
-    else
-      println(gameState.getAshLocation.x + " " + gameState.getAshLocation.y)
+
+    // unable to find best path so fall back to closest human
+    } else {
+      val p = gameState.getClosestHumanToAsh
+      println(p.x + " " + p.y)
+    }
   }
 }
