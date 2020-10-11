@@ -76,26 +76,26 @@ object Trig {
    * @return
    */
   def distance(p1: Point, p2: Point): Double = {
-    val rise = abs(p2.y - p1.y)
-    val run = abs(p2.x - p1.x)
-
-    sqrt(pow(rise, 2) + pow(run, 2))
+    sqrt(pow(p2.x - p1.x, 2) + pow(p2.y - p1.y, 2))
   }
 
   /**
-   * This creates an isosceles right triangle where two sides are equal,
-   * two angles are equal (45 degrees), the third angle is 90, and the base is computed
-   *
-   * NOTE: The base length is rounded down in order to keep x any y Integers
    * @param startingPoint Where the agent starts
    * @param targetPoint Where the agent is ultimately trying to get to
    * @param movementPoints A constraint on the amount an agent can move within a single turn
-   * @return The point where the agent will end up, given its energy constraint.
+   * @return The point where the agent will end up, given its movement constraint.
    */
-  // TODO: THIS HAS A BUG I THINK IN IT BECAUSE THE METHOD BELOW DOESN"T WORK RIGHT@@@
   def constrainedDestination(startingPoint: Point, targetPoint: Point, movementPoints: Int): Point = {
-    val legLength = sqrt(pow(movementPoints, 2) / 2)
-    Point(x = legLength.floor.toInt, y = legLength.floor.toInt)
+    val c = Trig.distance(startingPoint, targetPoint)
+
+    if (movementPoints >= c)
+      return targetPoint
+
+    val ratio = movementPoints/c
+    val a = targetPoint.x - startingPoint.x
+    val b = targetPoint.y - startingPoint.y
+
+    Point(startingPoint.x + (a*ratio).floor.toInt, startingPoint.y + (b*ratio).floor.toInt)
   }
 
   /**
@@ -107,12 +107,7 @@ object Trig {
    * @return
    */
   def turnsNeededToReach(p1: Point, p2: Point, movementPoints: Int): Int = {
-    val totalDistance = Trig.distance(p1, p2)
-//    val distanceTraveledPerTurn = Trig.distance(p1, Trig.constrainedDestination(p1, p2, movementPoints))
-
-//    Console.err.println(s"Comparing $p1 to $p2 with $movementPoints movementPoints. " +
-//      s"totalDistance:$totalDistance distanceTraveledPerTurn:$distanceTraveledPerTurn")
-    (totalDistance / movementPoints).ceil.toInt
+    (Trig.distance(p1, p2) / movementPoints).ceil.toInt
   }
 }
 
