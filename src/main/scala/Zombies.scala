@@ -2,34 +2,43 @@ import AgentFactory.AgentKind.{AgentKind, Human}
 
 import math._
 import scala.annotation.tailrec
-import scala.collection.mutable
+import scala.collection.immutable.Queue
 import scala.util._
 import scala.io.StdIn._
 
 object Simulation {
-  def monteCarlo(maxRounds: Int, startingState: GameState): Double = {
-    continue_sim(maxRounds, 0, startingState, 0.0)
+  case class Result(score: Double, moves: Queue[Point])
+
+  def monteCarlo(maxRounds: Int, startingState: GameState): Result = {
+    continue_sim(maxRounds, 0, startingState, Queue.empty[Point], 0.0)
   }
 
   @tailrec
   def continue_sim(maxRounds: Int,
                    currRound: Int,
                    currGameState: GameState,
-                   adjustedScore: Double): Double = {
+                   moves: Queue[Point],
+                   adjustedScore: Double): Result = {
 
     if (currRound == maxRounds) {
-      Console.err.println(s"Score:$adjustedScore. Max rounds reached!")
-      adjustedScore
+//      Console.err.println(s"Score:$adjustedScore. Max rounds of [$maxRounds] reached!")
+      Result(adjustedScore, moves)
     } else if (currGameState.areAllHumansDead) {
-      Console.err.println(s"Score:$adjustedScore. All humans are dead!")
-      adjustedScore
+//      Console.err.println(s"Score:-1. All humans are dead on round [$currRound]!")
+      Result(-1, moves)
     } else if (currGameState.areAllZombiesDead) {
-      Console.err.println(s"Score:$adjustedScore. All Zombies are dead!")
-      adjustedScore
+//      Console.err.println(s"Score:$adjustedScore. All Zombies are dead on round [$currRound]!")
+      Result(adjustedScore, moves)
     } else {
-      val adjustedRoundScore = currGameState.getRoundScore - currGameState.cost
       val newGameState = currGameState.advanceGameState
-      continue_sim(maxRounds, currRound + 1, newGameState, adjustedScore + adjustedRoundScore)
+      val adjustedRoundScore = currGameState.getRoundScore - currGameState.cost
+
+      continue_sim(
+        maxRounds = maxRounds,
+        currRound = currRound + 1,
+        currGameState = newGameState,
+        moves = moves :+ newGameState.getAshLocation,
+        adjustedScore = adjustedScore + adjustedRoundScore)
     }
   }
 }
@@ -47,14 +56,16 @@ class GameState(humans: List[Agent], zombies: List[Zombie], ash: Ash) {
 
   val eatReward = 10
 
+  def getAshLocation: Point = ash.point
+
   def areAllHumansDead: Boolean = humans.isEmpty
 
   def areAllZombiesDead: Boolean = zombies.isEmpty
 
   def advanceGameState: GameState = {
-    Console.err.println(s"Ash is at location ${ash.point}")
-    humans.foreach(Console.err.println)
-    zombies.foreach(Console.err.println)
+//    Console.err.println(s"Ash is at location ${ash.point}")
+//    humans.foreach(Console.err.println)
+//    zombies.foreach(Console.err.println)
 
     val humansAndAsh = humans ++ List(ash.asInstanceOf[Agent])
     val movedZombies = zombies.map(z =>
@@ -224,9 +235,34 @@ object Player extends App {
 
     val ashStartingPoint = Point(x,y)
     val ash = new Ash(ashStartingPoint)
-//    val nextMove = ash.getNextMove
-//    println(nextMove.x + " " + nextMove.y)
 
-    //    Console.err.println(ash.getHumanInGreatestDanger)
+    val gameState = new GameState(
+      humans.values.toList,
+      zombies.values.toList.asInstanceOf[List[Zombie]],
+      ash
+    )
+
+    val maxIterations = 1000
+    var nextMove: Point = null
+    var bestScore: Double = 0.0
+    var i = 0
+
+    while (i < maxIterations) {
+      val result = Simulation.monteCarlo(maxRounds = 30, startingState = gameState)
+
+      if (result.score > bestScore) {
+        bestScore = result.score
+        nextMove = result.moves.dequeue._1
+      }
+
+      i += 1
+    }
+
+    // TODO: THERE IS SOMETHING WRONG WHERE IT RETURNS NULL NEXT MOVE
+    Console.err.println(s"Best score found was $bestScore via point $nextMove")
+    if (nextMove != null)
+      println(nextMove.x + " " + nextMove.y)
+    else
+      println(gameState.getAshLocation.x + " " + gameState.getAshLocation.y)
   }
 }
