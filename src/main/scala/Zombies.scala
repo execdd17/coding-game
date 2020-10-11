@@ -1,9 +1,101 @@
 import AgentFactory.AgentKind.{AgentKind, Human}
 
 import math._
+import scala.annotation.tailrec
 import scala.collection.mutable
 import scala.util._
 import scala.io.StdIn._
+
+object Simulation {
+  def monteCarlo(maxRounds: Int, startingState: GameState): Double = {
+    continue_sim(maxRounds, 0, startingState, 0.0)
+  }
+
+  @tailrec
+  def continue_sim(maxRounds: Int,
+                   currRound: Int,
+                   currGameState: GameState,
+                   adjustedScore: Double): Double = {
+
+    if (currRound == maxRounds) {
+      Console.err.println(s"Score:$adjustedScore. Max rounds reached!")
+      adjustedScore
+    } else if (currGameState.areAllHumansDead) {
+      Console.err.println(s"Score:$adjustedScore. All humans are dead!")
+      adjustedScore
+    } else if (currGameState.areAllZombiesDead) {
+      Console.err.println(s"Score:$adjustedScore. All Zombies are dead!")
+      adjustedScore
+    } else {
+      val adjustedRoundScore = currGameState.getRoundScore - currGameState.cost
+      val newGameState = currGameState.advanceGameState
+      continue_sim(maxRounds, currRound + 1, newGameState, adjustedScore + adjustedRoundScore)
+    }
+  }
+}
+
+object GameState {
+  val rand = new Random(seed = 1234)
+  val Array(maxX, maxY) = Array(16000, 9000)
+
+  def getRandomPoint: Point = Point(rand.nextInt(maxX), rand.nextInt(maxY))
+}
+
+class GameState(humans: List[Agent], zombies: List[Zombie], ash: Ash) {
+  val fibonacci: Array[Int] = Array(1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377, 610,
+    987, 1597, 2584, 4181, 6765, 10946, 17711, 28657, 46368, 75025, 121393, 196418, 317811)
+
+  val eatReward = 10
+
+  def areAllHumansDead: Boolean = humans.isEmpty
+
+  def areAllZombiesDead: Boolean = zombies.isEmpty
+
+  def advanceGameState: GameState = {
+    Console.err.println(s"Ash is at location ${ash.point}")
+    humans.foreach(Console.err.println)
+    zombies.foreach(Console.err.println)
+
+    val humansAndAsh = humans ++ List(ash.asInstanceOf[Agent])
+    val movedZombies = zombies.map(z =>
+      z.moveTo(Trig.constrainedDestination(z.point, z.findClosestHuman(humansAndAsh).point, z.getMovementPoints))
+    )
+    val deadZombies = ash.eligibleTargets(zombies)
+    val nextGenZombies = movedZombies.filterNot(z => deadZombies.exists(dz => dz.id == z.id))
+
+    val deadHumans = nextGenZombies.foldLeft(Set.empty[Agent]) { (memo, zombie) =>
+      memo ++ zombie.eligibleTargets(humans)
+    }
+    val nextGenHumans = humans.filterNot(h => deadHumans.exists(dh => dh.id == h.id))
+
+    val newAsh = ash.moveTo(Trig.constrainedDestination(ash.point, GameState.getRandomPoint, ash.getMovementPoints))
+    new GameState(humans=nextGenHumans, zombies=nextGenZombies, ash=newAsh)
+  }
+
+  /**
+   * A zombie is worth the number of humans still alive squared x10, not including Ash.
+   *
+   * If several zombies are destroyed during on the same round, the nth zombie killed's worth
+   * is multiplied by the (n+2)th number of the Fibonnacci sequence (1, 2, 3, 5, 8, and so on).
+   * As a consequence, you should kill the maximum amount of zombies during a same turn.
+   * @return
+   */
+  def getRoundScore: Double = {
+    val zombiesToShoot = ash.eligibleTargets(zombies)
+    // (num humans ** 2) * 10 * (chain #)
+    zombiesToShoot.zipWithIndex.map(t => pow(humans.length, 2) * 10 * fibonacci(t._2)).sum
+  }
+
+  // Something to optimize on with more than just game score
+  def cost: Double = {
+    zombies.foldLeft(0) { (memo, zombie) =>
+      humans.find(h => zombie.canEat(h)) match {
+        case Some(_) => memo + eatReward
+        case None => memo
+      }
+    }
+  }
+}
 
 trait Movable {
   def getMovementPoints: Int
@@ -11,60 +103,20 @@ trait Movable {
 
 object Ash {
   val MovementPoints = 1000
-
-  def apply(location: Point, humans: Map[Int, Agent], zombies: Map[Int, Agent]): Ash = {
-    new Ash(location, humans, zombies)
-  }
+  val GunMaxRange = 2000
 }
 
-class Ash(location: Point, humans: Map[Int, Agent], zombies: Map[Int, Agent])
-  extends Agent(-1, location) with Movable {
-
-  // key is the distance between the two agent ids
-  // _1 is the human id and _2 is the zombie id
-  private val zombieHumanDistances: Map[Double, (Int,Int)] = calculateDistances
-  Console.err.println(zombieHumanDistances.toList.sortBy(_._1))
+class Ash(location: Point)
+  extends Agent(-1, location) {
 
   override def getMovementPoints: Int = 1000
 
-  def getNextMove: Point = {
-    val goners = mutable.ListBuffer.empty[Int]
+  def eligibleTargets(agents: List[Agent]): List[Agent] = agents.filter(agent => canShoot(agent))
 
-    val maybeMove = zombieHumanDistances.keys.toList.sorted.find { distance =>
-      val canSave = isPossibleToSave(
-        humans(zombieHumanDistances(distance)._1),
-        zombies(zombieHumanDistances(distance)._2)
-      )
+  def canShoot(agent: Agent): Boolean = Trig.distance(agent.point, location) <= Ash.GunMaxRange
 
-      if (!canSave)
-        goners += zombieHumanDistances(distance)._1
+  def moveTo(point: Point): Ash = new Ash(point)
 
-      canSave && !goners.contains(zombieHumanDistances(distance)._1)
-    }
-
-    maybeMove match {
-      case Some(distanceKey) => humans(zombieHumanDistances(distanceKey)._1).point
-      case None =>
-        Console.err.println("IT IS HOPELESS!")
-        location // stay where you are and cry
-    }
-  }
-
-  private def calculateDistances: Map[Double, (Int,Int)] = {
-    zombies.map { zombie =>
-      val closestHuman = humans.minBy(tuple => Trig.distance(tuple._2.point, zombie._2.point))
-      Map(Trig.distance(closestHuman._2.point, zombie._2.point) -> (closestHuman._1, zombie._1))
-    }.flatten.toMap
-  }
-
-  private def isPossibleToSave(human: Agent, zombie: Agent): Boolean = {
-    val turnsUntilDead = Trig.turnsNeededToReach(zombie.point, human.point, zombie.getMovementPoints)
-    val turnsUntilRescue = Trig.turnsNeededToReach(this.location, human.point, this.getMovementPoints)
-
-    Console.err.println(s"It will take $turnsUntilRescue turns to rescue $human and " +
-      s"$turnsUntilDead turns until $zombie kills him")
-    turnsUntilRescue <= turnsUntilDead
-  }
 }
 
 object Trig {
@@ -124,6 +176,15 @@ class Human(id: Int, point: Point) extends Agent(id, point) {
 
 class Zombie(id: Int, point: Point) extends Agent(id, point) {
   override def getMovementPoints: Int = 400
+
+  def eligibleTargets(agents: List[Agent]): List[Agent] = agents.filter(agent => canEat(agent))
+
+  def canEat(agent: Agent): Boolean = Trig.distance(point, agent.point) < 400
+
+  def moveTo(target: Point): Zombie =
+    new Zombie(id, Trig.constrainedDestination(point, target, getMovementPoints))
+
+  def findClosestHuman(humans: List[Agent]): Agent = humans.minBy(h => Trig.distance(h.point, point))
 }
 
 object AgentFactory {
@@ -162,9 +223,9 @@ object Player extends App {
     val zombies: Map[Int, Agent] = getAgents(AgentFactory.AgentKind.Zombie)
 
     val ashStartingPoint = Point(x,y)
-    val ash = Ash(ashStartingPoint, humans, zombies)
-    val nextMove = ash.getNextMove
-    println(nextMove.x + " " + nextMove.y)
+    val ash = new Ash(ashStartingPoint)
+//    val nextMove = ash.getNextMove
+//    println(nextMove.x + " " + nextMove.y)
 
     //    Console.err.println(ash.getHumanInGreatestDanger)
   }
