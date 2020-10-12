@@ -253,13 +253,13 @@ object Player extends App {
     else if (zombies.size + humans.size <= 6)
         450
     else if (zombies.size + humans.size < 10)
-        300
+        280
     else if (zombies.size + humans.size < 15)
-        180
+        160
     else if (zombies.size + humans.size < 20)
         85
     else
-        60
+        50
 
     var nextMove: Point = null
     var bestScore: Double = 0.0
