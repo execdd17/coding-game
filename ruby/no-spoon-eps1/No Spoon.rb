@@ -1,4 +1,7 @@
 # https://www.codingame.com/training/medium/there-is-no-spoon-episode-1
+# The interesting thing about this solution is I use a second array.
+# The first array is normal row by columns but the second is column-oriented.
+# That means second_matrix[N] returns an array of elements for the column and not row.
 
 STDOUT.sync = true # DO NOT REMOVE
 # Don't let the machines win. You are humanity's last hope...
@@ -18,6 +21,8 @@ class Point
   attr_reader :x, :y
 end
 
+# NOTE: This is called find_right because it's always looking within an
+# array of elements, to the right. This is true for the row-wise and column-wise matrices
 def find_right(row_i, col_i, matrix)
   col_start_index = [col_i + 1, matrix[row_i].length].min
   search_space = matrix[row_i][col_start_index..-1]
